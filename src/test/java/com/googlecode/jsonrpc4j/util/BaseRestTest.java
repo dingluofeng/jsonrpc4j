@@ -1,18 +1,19 @@
 package com.googlecode.jsonrpc4j.util;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.googlecode.jsonrpc4j.JsonRpcHttpClient;
-import com.googlecode.jsonrpc4j.spring.rest.JsonRpcRestClient;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.util.HashMap;
+import java.util.Map;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.springframework.web.client.RestTemplate;
 
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.util.HashMap;
-import java.util.Map;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.googlecode.jsonrpc4j.JsonRpcHttpClient;
+import com.googlecode.jsonrpc4j.spring.rest.JsonRpcRestClient;
 
 public abstract class BaseRestTest {
 	
@@ -26,14 +27,14 @@ public abstract class BaseRestTest {
 	}
 	
 	private JettyServer createServer() throws Exception {
-		Class service = service();
+        Class<?> service = service();
 		if (service == null) return null;
 		JettyServer jettyServer = new JettyServer(service);
 		jettyServer.startup();
 		return jettyServer;
 	}
 	
-	protected abstract Class service();
+    protected abstract Class<?> service();
 	
 	protected JsonRpcRestClient getClient() throws MalformedURLException {
 		return getClient(JettyServer.SERVLET);

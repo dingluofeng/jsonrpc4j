@@ -1,11 +1,5 @@
 package com.googlecode.jsonrpc4j.util;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.googlecode.jsonrpc4j.JsonRpcBasicServer;
-import com.googlecode.jsonrpc4j.JsonRpcServer;
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -14,6 +8,12 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.googlecode.jsonrpc4j.JsonRpcBasicServer;
+import com.googlecode.jsonrpc4j.JsonRpcServer;
 
 public class Util {
 	public static final String param1 = "param1";
@@ -26,7 +26,6 @@ public class Util {
 	public static final long longParam = 1600000000000L;
 	public static final String JSON_ENCODING = StandardCharsets.UTF_8.name();
 	public static final ObjectMapper mapper = new ObjectMapper();
-	@SuppressWarnings("PMD.AvoidUsingHardCodedIP")
 	public static final String DEFAULT_LOCAL_HOSTNAME = "127.0.0.1";
 	private static final String invalidJsonRpcRequest = "{\"method\": \"subtract\", \"params\": [], \"id\": 1}";
 	private static final String invalidJson = "{\"jsonrpc\": \"2.0,\n" +

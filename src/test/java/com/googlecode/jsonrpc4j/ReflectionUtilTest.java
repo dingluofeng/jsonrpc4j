@@ -170,7 +170,7 @@ public class ReflectionUtilTest {
     void objectParamSameName(Object2 obj);
 	}
 
-  private static class Object1 {
+    public static class Object1 {
     String foo;
 
     public String getFoo() {
@@ -182,7 +182,7 @@ public class ReflectionUtilTest {
     }
   }
 
-  private static class Object2 {
+    public static class Object2 {
     String foo;
 
     public String getFoo() {

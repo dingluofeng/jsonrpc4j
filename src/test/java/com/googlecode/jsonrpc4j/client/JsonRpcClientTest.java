@@ -1,11 +1,11 @@
 package com.googlecode.jsonrpc4j.client;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.googlecode.jsonrpc4j.JsonRpcClient;
-import com.googlecode.jsonrpc4j.RequestIDGenerator;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import static com.googlecode.jsonrpc4j.JsonRpcBasicServer.ID;
+import static com.googlecode.jsonrpc4j.JsonRpcBasicServer.PARAMS;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -13,12 +13,13 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
-import static com.googlecode.jsonrpc4j.JsonRpcBasicServer.ID;
-import static com.googlecode.jsonrpc4j.JsonRpcBasicServer.PARAMS;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.googlecode.jsonrpc4j.JsonRpcClient;
+import com.googlecode.jsonrpc4j.RequestIDGenerator;
 
 public class JsonRpcClientTest {
 
@@ -64,7 +65,12 @@ public class JsonRpcClientTest {
 		final String auth = "auth";
 		final String authValue = "secret";
 		client.setAdditionalJsonContent(new HashMap<String, Object>() {
-			{
+            /**
+             * 序列化ID
+             */
+            private static final long serialVersionUID = 1L;
+
+            {
 				put(auth, authValue);
 			}
 		});

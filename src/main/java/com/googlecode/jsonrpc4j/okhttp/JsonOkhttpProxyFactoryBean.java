@@ -1,4 +1,4 @@
-package com.googlecode.jsonrpc4j.spring;
+package com.googlecode.jsonrpc4j.okhttp;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Type;
@@ -6,9 +6,6 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
-
-import javax.net.ssl.HostnameVerifier;
-import javax.net.ssl.SSLContext;
 
 import org.aopalliance.intercept.MethodInterceptor;
 import org.aopalliance.intercept.MethodInvocation;
@@ -22,28 +19,27 @@ import org.springframework.remoting.support.UrlBasedRemoteAccessor;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.googlecode.jsonrpc4j.ExceptionResolver;
+import com.googlecode.jsonrpc4j.JsonRpcClient;
 import com.googlecode.jsonrpc4j.JsonRpcClient.RequestListener;
-import com.googlecode.jsonrpc4j.JsonRpcHttpClient;
 import com.googlecode.jsonrpc4j.ReflectionUtil;
 
-/**
- * {@link FactoryBean} for creating a {@link UrlBasedRemoteAccessor}
- * (aka consumer) for accessing an HTTP based JSON-RPC service.
- */
-public class JsonProxyFactoryBean extends UrlBasedRemoteAccessor implements MethodInterceptor, InitializingBean, FactoryBean<Object>, ApplicationContextAware {
+import okhttp3.OkHttpClient;
 
-	private Object proxyObject = null;
+public class JsonOkhttpProxyFactoryBean extends UrlBasedRemoteAccessor
+        implements MethodInterceptor, InitializingBean, FactoryBean<Object>, ApplicationContextAware {
+
+    private Object proxyObject = null;
 	private RequestListener requestListener = null;
 	private ObjectMapper objectMapper = null;
-	private JsonRpcHttpClient jsonRpcHttpClient = null;
+
+    private OkHttpClient okHttpClient = null;
+
+    private JsonRpcOkhttpClient jsonRpcClient = null;
+
 	private Map<String, String> extraHttpHeaders = new HashMap<>();
-	private String contentType;
 
-	private SSLContext sslContext = null;
-	private HostnameVerifier hostNameVerifier = null;
-	
 	private ExceptionResolver exceptionResolver; 
-
+	
 	private ApplicationContext applicationContext;
 
 	/**
@@ -52,11 +48,14 @@ public class JsonProxyFactoryBean extends UrlBasedRemoteAccessor implements Meth
 	@Override
 	public void afterPropertiesSet() {
 		super.afterPropertiesSet();
-		proxyObject = ProxyFactory.getProxy(getServiceInterface(), this);
 
-		if (jsonRpcHttpClient==null) {
+		proxyObject = ProxyFactory.getProxy(getObjectType(), this);
+
+        if (jsonRpcClient == null) {
+			
 			if (objectMapper == null && applicationContext != null && applicationContext.containsBean("objectMapper")) {
 				objectMapper = (ObjectMapper) applicationContext.getBean("objectMapper");
+			
 			}
 			if (objectMapper == null && applicationContext != null) {
 				try {
@@ -65,26 +64,24 @@ public class JsonProxyFactoryBean extends UrlBasedRemoteAccessor implements Meth
 					logger.debug(e);
 				}
 			}
+			
 			if (objectMapper == null) {
 				objectMapper = new ObjectMapper();
 			}
-	
+
 			try {
-				jsonRpcHttpClient = new JsonRpcHttpClient(objectMapper, new URL(getServiceUrl()), extraHttpHeaders);
-				jsonRpcHttpClient.setRequestListener(requestListener);
-				jsonRpcHttpClient.setSslContext(sslContext);
-				jsonRpcHttpClient.setHostNameVerifier(hostNameVerifier);
-	
-				if (contentType != null) {
-					jsonRpcHttpClient.setContentType(contentType);
-				}
+                jsonRpcClient = new JsonRpcOkhttpClient(new URL(getServiceUrl()), objectMapper, okHttpClient,
+                        new HashMap<String, String>());
+                jsonRpcClient.setRequestListener(requestListener);
 				
 				if (exceptionResolver!=null) {
-					jsonRpcHttpClient.setExceptionResolver(exceptionResolver);
+                    jsonRpcClient.setExceptionResolver(exceptionResolver);
 				}
+				
 			} catch (MalformedURLException mue) {
 				throw new RuntimeException(mue);
 			}
+			
 		}
 
 		ReflectionUtil.clearCache();
@@ -94,8 +91,7 @@ public class JsonProxyFactoryBean extends UrlBasedRemoteAccessor implements Meth
 	 * {@inheritDoc}
 	 */
 	@Override
-	public Object invoke(MethodInvocation invocation)
-			throws Throwable {
+	public Object invoke(MethodInvocation invocation) throws Throwable {
 		Method method = invocation.getMethod();
 		if (method.getDeclaringClass() == Object.class && method.getName().equals("toString")) {
 			return proxyObject.getClass().getName() + "@" + System.identityHashCode(proxyObject);
@@ -104,14 +100,14 @@ public class JsonProxyFactoryBean extends UrlBasedRemoteAccessor implements Meth
 		Type retType = (invocation.getMethod().getGenericReturnType() != null) ? invocation.getMethod().getGenericReturnType() : invocation.getMethod().getReturnType();
 		Object arguments = ReflectionUtil.parseArguments(invocation.getMethod(), invocation.getArguments());
 
-		return jsonRpcHttpClient.invoke(invocation.getMethod().getName(), arguments, retType, extraHttpHeaders);
+        return jsonRpcClient.invoke(invocation.getMethod().getName(), arguments, retType, extraHttpHeaders);
 	}
 
 	/**
 	 * {@inheritDoc}
 	 */
 	@Override
-	public Object getObject() {
+    public Object getObject() {
 		return proxyObject;
 	}
 
@@ -119,8 +115,8 @@ public class JsonProxyFactoryBean extends UrlBasedRemoteAccessor implements Meth
 	 * {@inheritDoc}
 	 */
 	@Override
-	public Class<?> getObjectType() {
-		return getServiceInterface();
+    public Class<?> getObjectType() {
+        return getServiceInterface();
 	}
 
 	/**
@@ -156,38 +152,26 @@ public class JsonProxyFactoryBean extends UrlBasedRemoteAccessor implements Meth
 	/**
 	 * @param requestListener the requestListener to set
 	 */
-	public void setRequestListener(RequestListener requestListener) {
+	public void setRequestListener(JsonRpcClient.RequestListener requestListener) {
 		this.requestListener = requestListener;
 	}
 
 	/**
-	 * @param sslContext SSL context to pass to JsonRpcClient
-	 */
-	public void setSslContext(SSLContext sslContext) {
-		this.sslContext = sslContext;
+     * @param okHttpClient
+     *            external OkHttpClient
+     */
+    public void setOkHttpClient(OkHttpClient okHttpClient) {
+        this.okHttpClient = okHttpClient;
 	}
 
-	/**
-	 * @param hostNameVerifier the hostNameVerifier to pass to JsonRpcClient
-	 */
-	public void setHostNameVerifier(HostnameVerifier hostNameVerifier) {
-		this.hostNameVerifier = hostNameVerifier;
-	}
-
-	/**
-	 * @param contentType the contentType to pass to JsonRpcClient
-	 */
-	public void setContentType(String contentType) {
-		this.contentType = contentType;
-	}
-
-	public void setJsonRpcHttpClient(JsonRpcHttpClient jsonRpcHttpClient) {
-		this.jsonRpcHttpClient = jsonRpcHttpClient;
+    public void setJsonRpcOkhttpClient(JsonRpcOkhttpClient jsonRpcOkhttpClient) {
+        this.jsonRpcClient = jsonRpcOkhttpClient;
 	}
 
 	public void setExceptionResolver(ExceptionResolver exceptionResolver) {
 		this.exceptionResolver = exceptionResolver;
 	}
 
-
+	
+	
 }

@@ -1,22 +1,5 @@
 package com.googlecode.jsonrpc4j.spring.rest;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.googlecode.jsonrpc4j.DefaultHttpStatusCodeProvider;
-import com.googlecode.jsonrpc4j.IJsonRpcClient;
-import com.googlecode.jsonrpc4j.JsonRpcClient;
-import com.googlecode.jsonrpc4j.JsonRpcClientException;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.converter.HttpMessageConversionException;
-import org.springframework.http.converter.HttpMessageConverter;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
-import org.springframework.web.client.HttpStatusCodeException;
-import org.springframework.web.client.RestTemplate;
-
-import javax.net.ssl.HostnameVerifier;
-import javax.net.ssl.SSLContext;
 import java.lang.reflect.Type;
 import java.net.Proxy;
 import java.net.URL;
@@ -27,7 +10,25 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
-@SuppressWarnings({"unused", "WeakerAccess"})
+import javax.net.ssl.HostnameVerifier;
+import javax.net.ssl.SSLContext;
+
+import org.springframework.http.HttpEntity;
+import org.springframework.http.converter.HttpMessageConversionException;
+import org.springframework.http.converter.HttpMessageConverter;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.HttpStatusCodeException;
+import org.springframework.web.client.RestTemplate;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.googlecode.jsonrpc4j.DefaultHttpStatusCodeProvider;
+import com.googlecode.jsonrpc4j.IJsonRpcClient;
+import com.googlecode.jsonrpc4j.JsonRpcClient;
+import com.googlecode.jsonrpc4j.JsonRpcClientException;
+
 public class JsonRpcRestClient extends JsonRpcClient implements IJsonRpcClient {
 
 	private final AtomicReference<URL> serviceUrl = new AtomicReference<>();
@@ -45,13 +46,11 @@ public class JsonRpcRestClient extends JsonRpcClient implements IJsonRpcClient {
 		this(serviceUrl, mapper, null, new HashMap<String, String>());
 	}
 
-	@SuppressWarnings("WeakerAccess")
 	public JsonRpcRestClient(URL serviceUrl, ObjectMapper mapper, RestTemplate restTemplate, Map<String, String> headers) {
 		super(mapper);
 		this.requestFactory = restTemplate != null ? null : new SslClientHttpRequestFactory();
 		this.restTemplate = restTemplate != null ? restTemplate : new RestTemplate(this.requestFactory);
 		this.serviceUrl.set(serviceUrl);
-
 		if (headers != null) {
 			this.headers.putAll(headers);
 		}

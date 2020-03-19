@@ -1,13 +1,13 @@
 package com.googlecode.jsonrpc4j;
 
-import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.databind.JavaType;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import static com.googlecode.jsonrpc4j.JsonRpcBasicServer.ERROR;
+import static com.googlecode.jsonrpc4j.JsonRpcBasicServer.ID;
+import static com.googlecode.jsonrpc4j.JsonRpcBasicServer.JSONRPC;
+import static com.googlecode.jsonrpc4j.JsonRpcBasicServer.METHOD;
+import static com.googlecode.jsonrpc4j.JsonRpcBasicServer.PARAMS;
+import static com.googlecode.jsonrpc4j.JsonRpcBasicServer.RESULT;
+import static com.googlecode.jsonrpc4j.JsonRpcBasicServer.VERSION;
+import static com.googlecode.jsonrpc4j.Util.hasNonNullData;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -18,19 +18,19 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
 
-import static com.googlecode.jsonrpc4j.JsonRpcBasicServer.ERROR;
-import static com.googlecode.jsonrpc4j.JsonRpcBasicServer.ID;
-import static com.googlecode.jsonrpc4j.JsonRpcBasicServer.JSONRPC;
-import static com.googlecode.jsonrpc4j.JsonRpcBasicServer.METHOD;
-import static com.googlecode.jsonrpc4j.JsonRpcBasicServer.PARAMS;
-import static com.googlecode.jsonrpc4j.JsonRpcBasicServer.RESULT;
-import static com.googlecode.jsonrpc4j.JsonRpcBasicServer.VERSION;
-import static com.googlecode.jsonrpc4j.Util.hasNonNullData;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.JavaType;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /**
  * A JSON-RPC client.
  */
-@SuppressWarnings({"WeakerAccess", "unused"})
 public class JsonRpcClient {
 	
 	// Toha: to use same logger in extension classes

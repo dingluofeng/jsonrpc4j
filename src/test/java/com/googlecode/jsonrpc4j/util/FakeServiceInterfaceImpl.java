@@ -1,11 +1,10 @@
 package com.googlecode.jsonrpc4j.util;
 
+import java.util.Collections;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
-
-@SuppressWarnings("WeakerAccess")
 public class FakeServiceInterfaceImpl implements FakeServiceInterface {
 	
 	private static final Logger logger = LoggerFactory.getLogger(FakeServiceInterfaceImpl.class);

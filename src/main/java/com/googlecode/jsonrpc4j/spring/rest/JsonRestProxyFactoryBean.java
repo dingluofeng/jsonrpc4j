@@ -1,10 +1,15 @@
 package com.googlecode.jsonrpc4j.spring.rest;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.googlecode.jsonrpc4j.ExceptionResolver;
-import com.googlecode.jsonrpc4j.JsonRpcClient;
-import com.googlecode.jsonrpc4j.JsonRpcClient.RequestListener;
-import com.googlecode.jsonrpc4j.ReflectionUtil;
+import java.lang.reflect.Method;
+import java.lang.reflect.Type;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.util.HashMap;
+import java.util.Map;
+
+import javax.net.ssl.HostnameVerifier;
+import javax.net.ssl.SSLContext;
+
 import org.aopalliance.intercept.MethodInterceptor;
 import org.aopalliance.intercept.MethodInvocation;
 import org.springframework.aop.framework.ProxyFactory;
@@ -16,20 +21,16 @@ import org.springframework.context.ApplicationContextAware;
 import org.springframework.remoting.support.UrlBasedRemoteAccessor;
 import org.springframework.web.client.RestTemplate;
 
-import javax.net.ssl.HostnameVerifier;
-import javax.net.ssl.SSLContext;
-import java.lang.reflect.Method;
-import java.lang.reflect.Type;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.util.HashMap;
-import java.util.Map;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.googlecode.jsonrpc4j.ExceptionResolver;
+import com.googlecode.jsonrpc4j.JsonRpcClient;
+import com.googlecode.jsonrpc4j.JsonRpcClient.RequestListener;
+import com.googlecode.jsonrpc4j.ReflectionUtil;
 
 /**
  * @param <T> the bean type
  * @author toha
  */
-@SuppressWarnings("unused")
 class JsonRestProxyFactoryBean<T> extends UrlBasedRemoteAccessor implements MethodInterceptor, InitializingBean, FactoryBean<T>, ApplicationContextAware {
 
 	private T proxyObject = null;

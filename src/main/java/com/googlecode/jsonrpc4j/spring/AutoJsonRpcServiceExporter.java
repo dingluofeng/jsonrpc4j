@@ -1,11 +1,13 @@
 package com.googlecode.jsonrpc4j.spring;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.googlecode.jsonrpc4j.ConvertedParameterTransformer;
-import com.googlecode.jsonrpc4j.ErrorResolver;
-import com.googlecode.jsonrpc4j.HttpStatusCodeProvider;
-import com.googlecode.jsonrpc4j.InvocationListener;
-import com.googlecode.jsonrpc4j.JsonRpcService;
+import static java.lang.String.format;
+import static org.springframework.util.ClassUtils.forName;
+import static org.springframework.util.ClassUtils.getAllInterfacesForClass;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Map.Entry;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeansException;
@@ -16,13 +18,12 @@ import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.beans.factory.support.BeanDefinitionBuilder;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Map.Entry;
-
-import static java.lang.String.format;
-import static org.springframework.util.ClassUtils.forName;
-import static org.springframework.util.ClassUtils.getAllInterfacesForClass;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.googlecode.jsonrpc4j.ConvertedParameterTransformer;
+import com.googlecode.jsonrpc4j.ErrorResolver;
+import com.googlecode.jsonrpc4j.HttpStatusCodeProvider;
+import com.googlecode.jsonrpc4j.InvocationListener;
+import com.googlecode.jsonrpc4j.JsonRpcService;
 
 /**
  * <p>This exporter class is deprecated because it exposes all beans from a spring context that has the
@@ -35,7 +36,6 @@ import static org.springframework.util.ClassUtils.getAllInterfacesForClass;
  * @deprecated use {@link AutoJsonRpcServiceImplExporter} instead.
  */
 @Deprecated
-@SuppressWarnings("unused")
 public class AutoJsonRpcServiceExporter implements BeanFactoryPostProcessor {
 
 	private static final Logger logger = LoggerFactory.getLogger(AutoJsonRpcServiceExporter.class);
@@ -74,7 +74,6 @@ public class AutoJsonRpcServiceExporter implements BeanFactoryPostProcessor {
 		return serviceBeanNames;
 	}
 
-	@SuppressWarnings("Convert2streamapi")
 	private static void collectFromParentBeans(ConfigurableListableBeanFactory beanFactory, Map<String, String> serviceBeanNames) {
 		BeanFactory parentBeanFactory = beanFactory.getParentBeanFactory();
 		if (parentBeanFactory != null && ConfigurableListableBeanFactory.class.isInstance(parentBeanFactory)) {
