@@ -135,7 +135,6 @@ public class DefaultExceptionResolver implements ExceptionResolver {
 		return messageCtr;
 	}
 	
-	@SuppressWarnings("UnusedParameters")
 	private void handleException(Exception e) {
 	      /* do nothing */
 	}

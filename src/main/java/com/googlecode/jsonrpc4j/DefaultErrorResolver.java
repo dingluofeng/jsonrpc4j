@@ -12,7 +12,6 @@ import static com.googlecode.jsonrpc4j.ErrorResolver.JsonError.ERROR_NOT_HANDLED
  * data portion of the error.  This {@link ErrorResolver} always
  * returns a {@link com.googlecode.jsonrpc4j.ErrorResolver.JsonError JsonError}.
  */
-@SuppressWarnings("WeakerAccess")
 public enum DefaultErrorResolver implements ErrorResolver {
 	INSTANCE;
 	

@@ -4,12 +4,14 @@ import static com.googlecode.jsonrpc4j.JsonRpcBasicServer.JSONRPC_CONTENT_TYPE;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.net.URL;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.fasterxml.jackson.databind.JsonMappingException;
@@ -18,7 +20,10 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.googlecode.jsonrpc4j.IJsonRpcClient;
 import com.googlecode.jsonrpc4j.JsonRpcClient;
 import com.googlecode.jsonrpc4j.okhttp.exceprions.OkHttpException;
+import com.googlecode.jsonrpc4j.okhttp.future.ListenableFutureImpl;
 
+import okhttp3.Call;
+import okhttp3.Callback;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -29,16 +34,16 @@ public class JsonRpcOkhttpClient extends JsonRpcClient implements IJsonRpcClient
 
 	private final AtomicReference<URL> serviceUrl = new AtomicReference<>();
 
-    private final OkHttpClient okHttpClient;
+	private final OkHttpClient okHttpClient;
 
 	private final Map<String, String> headers = new HashMap<>();
 
-    private String contentType = JSONRPC_CONTENT_TYPE;
+	private String contentType = JSONRPC_CONTENT_TYPE;
 
-    public JsonRpcOkhttpClient(URL serviceUrl, ObjectMapper mapper, OkHttpClient okHttpClient,
-        Map<String, String> headers) {
+	public JsonRpcOkhttpClient(URL serviceUrl, ObjectMapper mapper, OkHttpClient okHttpClient,
+			Map<String, String> headers) {
 		super(mapper);
-        this.okHttpClient = okHttpClient;
+		this.okHttpClient = okHttpClient;
 		this.serviceUrl.set(serviceUrl);
 		if (headers != null) {
 			this.headers.putAll(headers);
@@ -68,7 +73,6 @@ public class JsonRpcOkhttpClient extends JsonRpcClient implements IJsonRpcClient
 		this.serviceUrl.set(serviceUrl);
 	}
 
-
 	/**
 	 * {@inheritDoc}
 	 */
@@ -85,47 +89,73 @@ public class JsonRpcOkhttpClient extends JsonRpcClient implements IJsonRpcClient
 		return invoke(methodName, argument, returnType, new HashMap<String, String>());
 	}
 
-    @Override
-    public Object invoke(String methodName, Object argument, Type returnType, Map<String, String> extraHeaders)
-        throws Throwable {
-        Request.Builder requestBuilder = new Request.Builder().url(getServiceUrl());
-        // add extraHeaders
-        addHeaders(requestBuilder, extraHeaders);
+	@Override
+	public Object invoke(String methodName, Object argument, Type returnType, Map<String, String> extraHeaders)
+			throws Throwable {
+		Request.Builder requestBuilder = new Request.Builder().url(getServiceUrl());
+		// add extraHeaders
+		addHeaders(requestBuilder, extraHeaders);
 
-        final ObjectNode request = super.createRequest(methodName, argument);
-        try {
-            MediaType mediaType = MediaType.parse(contentType);
-            ObjectMapper objectMapper = this.getObjectMapper();
-            byte[] writeValueAsBytes = objectMapper.writeValueAsBytes(request);
-            RequestBody requestBody = RequestBody.create(mediaType, writeValueAsBytes);
+		final ObjectNode request = super.createRequest(methodName, argument);
+		try {
+			MediaType mediaType = MediaType.parse(contentType);
+			ObjectMapper objectMapper = this.getObjectMapper();
+			byte[] writeValueAsBytes = objectMapper.writeValueAsBytes(request);
+			RequestBody requestBody = RequestBody.create(mediaType, writeValueAsBytes);
+			try {
+				requestBuilder.post(requestBody);
+				if (returnType instanceof ParameterizedType) {
+					ParameterizedType pt = ParameterizedType.class.cast(returnType);
+					Type rawType = pt.getRawType();
+					Type[] actualTypeArguments = pt.getActualTypeArguments();
+					if (Future.class.isAssignableFrom((Class<?>) rawType)) {
+						ListenableFutureImpl<Object> future = new ListenableFutureImpl<>();
+						okHttpClient.newCall(requestBuilder.build()).enqueue(new Callback() {
+							@Override
+							public void onResponse(Call call, Response response) throws IOException {
+								try (InputStream answer = response.body().byteStream()) {
+									try {
+										Object readResponse = readResponse(actualTypeArguments[0], answer);
+										future.set(readResponse);
+									} catch (Throwable e) {
+										future.setException(e);
+									}
+								}
+							}
+							@Override
+							public void onFailure(Call call, IOException e) {
+								future.setException(e);
+							}
+						});
+						return future;
+					}
+				}
+				//同步发送
+				Response response = okHttpClient.newCall(requestBuilder.build()).execute();
+				// read and return value
+				try (InputStream answer = response.body().byteStream()) {
+					return super.readResponse(returnType, answer);
+				}
+			} catch (JsonMappingException e) {
+				// JsonMappingException inherits from IOException
+				throw e;
+			} catch (IOException e) {
+				throw new OkHttpException("Caught error with no response body.", e);
+			}
+		} finally {
+		}
+	}
 
-            try {
-                requestBuilder.post(requestBody);
-                Response response = okHttpClient.newCall(requestBuilder.build()).execute();
-                // read and return value
-                try (InputStream answer = response.body().byteStream()) {
-                    return super.readResponse(returnType, answer);
-                }
-            } catch (JsonMappingException e) {
-                // JsonMappingException inherits from IOException
-                throw e;
-            } catch (IOException e) {
-                throw new OkHttpException("Caught error with no response body.", e);
-            }
-        } finally {
-        }
-    }
+	private final void addHeaders(Request.Builder request, Map<String, String> extraHeaders) {
+		Map<String, String> headers = getHeaders();
+		for (Entry<String, String> entry : headers.entrySet()) {
+			request.addHeader(entry.getKey(), entry.getValue());
+		}
 
-    private final void addHeaders(Request.Builder request, Map<String, String> extraHeaders) {
-        Map<String, String> headers = getHeaders();
-        for (Entry<String, String> entry : headers.entrySet()) {
-            request.addHeader(entry.getKey(), entry.getValue());
-        }
-
-        for (Entry<String, String> entry : extraHeaders.entrySet()) {
-            request.addHeader(entry.getKey(), entry.getValue());
-        }
-    }
+		for (Entry<String, String> entry : extraHeaders.entrySet()) {
+			request.addHeader(entry.getKey(), entry.getValue());
+		}
+	}
 
 	/**
 	 * {@inheritDoc}
@@ -141,7 +171,8 @@ public class JsonRpcOkhttpClient extends JsonRpcClient implements IJsonRpcClient
 	 */
 	@SuppressWarnings("unchecked")
 	@Override
-	public <T> T invoke(String methodName, Object argument, Class<T> clazz, Map<String, String> extraHeaders) throws Throwable {
+	public <T> T invoke(String methodName, Object argument, Class<T> clazz, Map<String, String> extraHeaders)
+			throws Throwable {
 		return (T) invoke(methodName, argument, Type.class.cast(clazz), extraHeaders);
 	}
 

@@ -41,6 +41,12 @@
 			<artifactId>okhttp</artifactId>
 			<version>${okhttp3.version}</version>
 		</dependency>
+		<!-- https://mvnrepository.com/artifact/com.google.guava/guava -->
+		<dependency>
+		    <groupId>com.google.guava</groupId>
+		    <artifactId>guava</artifactId>
+		    <version>18.0</version>
+		</dependency>
 		<!-- 
 		 | json dependencies
 		 +-->

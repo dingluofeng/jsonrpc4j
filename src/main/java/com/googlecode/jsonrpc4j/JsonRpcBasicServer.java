@@ -4,7 +4,11 @@ import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.*;
 import com.fasterxml.jackson.databind.node.*;
+import com.google.common.util.concurrent.FutureCallback;
+import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.ListenableFuture;
 import com.googlecode.jsonrpc4j.ErrorResolver.JsonError;
+
 import net.iharder.Base64;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,7 +33,6 @@ import static com.googlecode.jsonrpc4j.Util.hasNonNullData;
  * A JSON-RPC request server reads JSON-RPC requests from an input stream and writes responses to an output stream.
  * Can even run on Android system.
  */
-@SuppressWarnings({"unused", "WeakerAccess"})
 public class JsonRpcBasicServer {
 	
 	public static final String JSONRPC_CONTENT_TYPE = "application/json-rpc";
@@ -359,21 +362,57 @@ public class JsonRpcBasicServer {
 					interceptor.preHandle(target, methodArgs.method, methodArgs.arguments);
 				}
 				// invocation
-				JsonNode result = invoke(target, methodArgs.method, methodArgs.arguments);
-				handler.result = result;
-				// interceptors postHandle
-				for (JsonRpcInterceptor interceptor : interceptorList) {
-					interceptor.postHandle(target, methodArgs.method, methodArgs.arguments, result);
+				Object ret = invoke(target, methodArgs.method, methodArgs.arguments);
+				if (ret instanceof ListenableFuture) {
+					Futures.addCallback((ListenableFuture<?>)ret, new FutureCallback<Object>() {
+                        @Override
+                        public void onSuccess(Object ret) {
+                        	try {
+                        		responseHandle(output, id, jsonRpc, methodArgs, handler, target, ret);
+							} catch (Throwable e) {
+								handler.error = e;
+								responseError(output, id, jsonRpc, methodArgs, e);
+							}
+                        }
+                        @Override
+                        public void onFailure(Throwable t) {
+                        	responseError(output, id, jsonRpc, methodArgs, t);
+                        }
+                    });
+					return JsonError.OK;
+				}else {
+					responseHandle(output, id, jsonRpc, methodArgs, handler, target, ret);
+					return JsonError.OK;
 				}
-				if (!isNotificationRequest(id)) {
-					ObjectNode response = createResponseSuccess(jsonRpc, id, handler.result);
-					writeAndFlushValue(output, response);
-				}
-				return JsonError.OK;
 			} catch (Throwable e) {
 				handler.error = e;
 				return handleError(output, id, jsonRpc, methodArgs, e);
 			}
+		}
+	}
+	
+	private final void responseError(final OutputStream output, Object id, String jsonRpc,
+			AMethodWithItsArgs methodArgs, Throwable e) {
+		try {
+			handleError(output, id, jsonRpc, methodArgs, e);
+		} catch (Exception e1) {
+			logger.error("",e1);
+		}
+	}
+
+	private final void responseHandle(final OutputStream output, Object id, String jsonRpc, AMethodWithItsArgs methodArgs,
+			InvokeListenerHandler handler, Object target, Object ret) throws IOException {
+		//return value
+		JsonNode result=hasReturnValue(methodArgs.method) ? mapper.valueToTree(ret) : null;
+		
+		handler.result = result;
+		// interceptors postHandle
+		for (JsonRpcInterceptor interceptor : interceptorList) {
+			interceptor.postHandle(target, methodArgs.method, methodArgs.arguments, result);
+		}
+		if (!isNotificationRequest(id)) {
+			ObjectNode response = createResponseSuccess(jsonRpc, id, handler.result);
+			writeAndFlushValue(output, response);
 		}
 	}
 	
@@ -473,7 +512,7 @@ public class JsonRpcBasicServer {
 	 * @throws IllegalAccessException    on error
 	 * @throws InvocationTargetException on error
 	 */
-	private JsonNode invoke(Object target, Method method, List<JsonNode> params) throws IOException, IllegalAccessException, InvocationTargetException {
+	private Object invoke(Object target, Method method, List<JsonNode> params) throws IOException, IllegalAccessException, InvocationTargetException {
 		logger.debug("Invoking method: {} with args {}", method.getName(), params);
 
 		Object result;
@@ -493,7 +532,7 @@ public class JsonRpcBasicServer {
 
 		logger.debug("Invoked method: {}, result {}", method.getName(), result);
 
-		return hasReturnValue(method) ? mapper.valueToTree(result) : null;
+		return result;
 	}
 
 	private Object invokePrimitiveVarargs(Object target, Method method, List<JsonNode> params, Class<?> componentType) throws IllegalAccessException, InvocationTargetException {
@@ -809,7 +848,6 @@ public class JsonRpcBasicServer {
 	 * @param type the {@link Class}
 	 * @return true if the types match, false otherwise
 	 */
-	@SuppressWarnings("SimplifiableIfStatement")
 	private boolean isMatchingType(JsonNode node, Class<?> type) {
 		if (node.isNull()) {
 			return true;
@@ -1152,7 +1190,6 @@ public class JsonRpcBasicServer {
 			this.nameCount = nameCount;
 		}
 		
-		@SuppressWarnings("Convert2streamapi")
 		private List<JsonRpcParam> getAnnotatedParameterNames(Method method) {
 			List<JsonRpcParam> parameterNames = new ArrayList<>();
 			for (List<? extends Annotation> webParamAnnotation : getWebParameterAnnotations(method)) {
@@ -1202,10 +1239,12 @@ public class JsonRpcBasicServer {
 			method = null;
 		}
 		
+		@SuppressWarnings("unused")
 		public int getTypeCount() {
 			return typeCount;
 		}
 		
+		@SuppressWarnings("unused")
 		public int getNameCount() {
 			return nameCount;
 		}
