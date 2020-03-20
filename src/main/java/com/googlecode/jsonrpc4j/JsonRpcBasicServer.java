@@ -1,33 +1,52 @@
 package com.googlecode.jsonrpc4j;
 
-import com.fasterxml.jackson.core.JsonParseException;
-import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.databind.*;
-import com.fasterxml.jackson.databind.node.*;
-import com.google.common.util.concurrent.FutureCallback;
-import com.google.common.util.concurrent.Futures;
-import com.google.common.util.concurrent.ListenableFuture;
-import com.googlecode.jsonrpc4j.ErrorResolver.JsonError;
-
-import net.iharder.Base64;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import static com.googlecode.jsonrpc4j.ErrorResolver.JsonError.ERROR_NOT_HANDLED;
+import static com.googlecode.jsonrpc4j.ReflectionUtil.findCandidateMethods;
+import static com.googlecode.jsonrpc4j.ReflectionUtil.getParameterTypes;
+import static com.googlecode.jsonrpc4j.Util.hasNonNullData;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.annotation.Annotation;
-import java.lang.reflect.*;
+import java.lang.reflect.Array;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
+import java.lang.reflect.Type;
+import java.lang.reflect.UndeclaredThrowableException;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 
-import static com.googlecode.jsonrpc4j.ErrorResolver.JsonError.ERROR_NOT_HANDLED;
-import static com.googlecode.jsonrpc4j.ReflectionUtil.findCandidateMethods;
-import static com.googlecode.jsonrpc4j.ReflectionUtil.getParameterTypes;
-import static com.googlecode.jsonrpc4j.Util.hasNonNullData;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.fasterxml.jackson.core.JsonParseException;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JavaType;
+import com.fasterxml.jackson.databind.JsonMappingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.NullNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.google.common.util.concurrent.FutureCallback;
+import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.ListenableFuture;
+import com.googlecode.jsonrpc4j.ErrorResolver.JsonError;
+
+import net.iharder.Base64;
 
 /**
  * A JSON-RPC request server reads JSON-RPC requests from an input stream and writes responses to an output stream.
@@ -326,70 +345,83 @@ public class JsonRpcBasicServer {
 	 * @return the error code, or {@code 0} if none
 	 * @throws IOException on error
 	 */
-	private JsonError handleObject(final ObjectNode node, final OutputStream output) throws IOException {
-		logger.debug("Request: {}", node);
-		
-		if (!isValidRequest(node)) {
-			return writeAndFlushValueError(output, createResponseError(VERSION, NULL, JsonError.INVALID_REQUEST));
-		}
-		Object id = parseId(node.get(ID));
-		
-		String jsonRpc = hasNonNullData(node, JSONRPC) ? node.get(JSONRPC).asText() : VERSION;
-		if (!hasNonNullData(node, METHOD)) {
-			return writeAndFlushValueError(output, createResponseError(jsonRpc, id, JsonError.METHOD_NOT_FOUND));
-		}
+    private JsonError handleObject(final ObjectNode node, final OutputStream output) throws IOException {
+        logger.debug("Request: {}", node);
 
-		final String fullMethodName = node.get(METHOD).asText();
-		final String partialMethodName = getMethodName(fullMethodName);
-		final String serviceName = getServiceName(fullMethodName);
-		
-		Set<Method> methods = findCandidateMethods(getHandlerInterfaces(serviceName), partialMethodName);
-		if (methods.isEmpty()) {
-			return writeAndFlushValueError(output, createResponseError(jsonRpc, id, JsonError.METHOD_NOT_FOUND));
-		}
-		AMethodWithItsArgs methodArgs = findBestMethodByParamsNode(methods, node.get(PARAMS));
-		if (methodArgs == null) {
-			return writeAndFlushValueError(output, createResponseError(jsonRpc, id, JsonError.METHOD_PARAMS_INVALID));
-		}
-		try (InvokeListenerHandler handler = new InvokeListenerHandler(methodArgs, invocationListener)) {
-			try {
-				if (this.requestInterceptor != null) {
-					this.requestInterceptor.interceptRequest(node);
-				}
-				Object target = getHandler(serviceName);
-				// interceptors preHandle
-				for (JsonRpcInterceptor interceptor : interceptorList) {
-					interceptor.preHandle(target, methodArgs.method, methodArgs.arguments);
-				}
-				// invocation
-				Object ret = invoke(target, methodArgs.method, methodArgs.arguments);
-				if (ret instanceof ListenableFuture) {
-					Futures.addCallback((ListenableFuture<?>)ret, new FutureCallback<Object>() {
-                        @Override
-                        public void onSuccess(Object ret) {
-                        	try {
-                        		responseHandle(output, id, jsonRpc, methodArgs, handler, target, ret);
-							} catch (Throwable e) {
-								handler.error = e;
-								responseError(output, id, jsonRpc, methodArgs, e);
-							}
+        if (!isValidRequest(node)) {
+            return writeAndFlushValueError(output, createResponseError(VERSION, NULL, JsonError.INVALID_REQUEST));
+        }
+        Object id = parseId(node.get(ID));
+
+        String jsonRpc = hasNonNullData(node, JSONRPC) ? node.get(JSONRPC).asText() : VERSION;
+        if (!hasNonNullData(node, METHOD)) {
+            return writeAndFlushValueError(output, createResponseError(jsonRpc, id, JsonError.METHOD_NOT_FOUND));
+        }
+
+        final String fullMethodName = node.get(METHOD).asText();
+        final String partialMethodName = getMethodName(fullMethodName);
+        final String serviceName = getServiceName(fullMethodName);
+
+        Set<Method> methods = findCandidateMethods(getHandlerInterfaces(serviceName), partialMethodName);
+        if (methods.isEmpty()) {
+            return writeAndFlushValueError(output, createResponseError(jsonRpc, id, JsonError.METHOD_NOT_FOUND));
+        }
+        AMethodWithItsArgs methodArgs = findBestMethodByParamsNode(methods, node.get(PARAMS));
+        if (methodArgs == null) {
+            return writeAndFlushValueError(output, createResponseError(jsonRpc, id, JsonError.METHOD_PARAMS_INVALID));
+        }
+        boolean async = false;
+        final InvokeListenerHandler handler = new InvokeListenerHandler(methodArgs, invocationListener);
+        try {
+            if (this.requestInterceptor != null) {
+                this.requestInterceptor.interceptRequest(node);
+            }
+            Object target = getHandler(serviceName);
+            // interceptors preHandle
+            for (JsonRpcInterceptor interceptor : interceptorList) {
+                interceptor.preHandle(target, methodArgs.method, methodArgs.arguments);
+            }
+            // invocation
+            Object ret = invoke(target, methodArgs.method, methodArgs.arguments);
+            if (ret instanceof ListenableFuture) {
+                async = true;
+                Futures.addCallback((ListenableFuture<?>) ret, new FutureCallback<Object>() {
+                    @Override
+                    public void onSuccess(Object ret) {
+                        try {
+                            responseHandle(output, id, jsonRpc, methodArgs, handler, target, ret);
+                        } catch (Throwable e) {
+                            handler.error = e;
+                            responseError(output, id, jsonRpc, methodArgs, e);
+                        } finally {
+                            handler.close();
                         }
-                        @Override
-                        public void onFailure(Throwable t) {
-                        	responseError(output, id, jsonRpc, methodArgs, t);
+                    }
+
+                    @Override
+                    public void onFailure(Throwable t) {
+                        try {
+                            handler.error = t;
+                            responseError(output, id, jsonRpc, methodArgs, t);
+                        } finally {
+                            handler.close();
                         }
-                    });
-					return JsonError.OK;
-				}else {
-					responseHandle(output, id, jsonRpc, methodArgs, handler, target, ret);
-					return JsonError.OK;
-				}
-			} catch (Throwable e) {
-				handler.error = e;
-				return handleError(output, id, jsonRpc, methodArgs, e);
-			}
-		}
-	}
+                    }
+                });
+                return JsonError.OK;
+            } else {
+                responseHandle(output, id, jsonRpc, methodArgs, handler, target, ret);
+                return JsonError.OK;
+            }
+        } catch (Throwable e) {
+            handler.error = e;
+            return handleError(output, id, jsonRpc, methodArgs, e);
+        } finally {
+            if (!async) {
+                handler.close();
+            }
+        }
+    }
 	
 	private final void responseError(final OutputStream output, Object id, String jsonRpc,
 			AMethodWithItsArgs methodArgs, Throwable e) {
